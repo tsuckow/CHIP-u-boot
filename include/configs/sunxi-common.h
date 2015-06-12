@@ -160,7 +160,14 @@
 #define CONFIG_CMD_MMC
 #define CONFIG_MMC_SUNXI
 #define CONFIG_MMC_SUNXI_SLOT		0
-#define CONFIG_ENV_IS_IN_MMC
+#endif
+
+#if defined(CONFIG_ENV_IS_IN_NAND)
+#define CONFIG_ENV_OFFSET			0xc00000
+#define CONFIG_ENV_SIZE				0x400000
+#elif defined(CONFIG_ENV_IS_IN_MMC)
+#define CONFIG_ENV_OFFSET			(544 << 10) /* (8 + 24 + 512) KiB */
+#define CONFIG_ENV_SIZE				(128 << 10) /* 128 KiB */
 #define CONFIG_SYS_MMC_ENV_DEV		0	/* first detected MMC controller */
 #endif
 
@@ -192,9 +199,6 @@
 
 #define CONFIG_SYS_MONITOR_LEN		(768 << 10)	/* 768 KiB */
 #define CONFIG_IDENT_STRING		" Allwinner Technology"
-
-#define CONFIG_ENV_OFFSET		(544 << 10) /* (8 + 24 + 512) KiB */
-#define CONFIG_ENV_SIZE			(128 << 10)	/* 128 KiB */
 
 #define CONFIG_FAT_WRITE	/* enable write access */
 
