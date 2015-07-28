@@ -198,6 +198,14 @@ struct hq27_rr_table {
 
 #define H27Q_RR_TABLE_NSETS		8
 
+static void h27q_set_slc_mode(struct mtd_info *mtd, bool enable)
+{
+	struct nand_chip *chip = mtd->priv;
+	u8 cmd = enable ? 0xbf : 0xbe;
+
+	chip->cmdfunc(mtd, cmd, -1, -1);
+}
+
 static int h27q_rr_init(struct mtd_info *mtd, const struct hq27_rr_table *info)
 {
 	struct nand_chip *chip = mtd->priv;
@@ -317,6 +325,7 @@ static int h27q_init(struct mtd_info *mtd, const uint8_t *id)
 
 	chip->manuf_priv = hynix;
 	chip->manuf_cleanup = h27_cleanup;
+	chip->set_slc_mode = h27q_set_slc_mode;
 
 	for (i = 0; i < ARRAY_SIZE(hq27_rr_tables); i++) {
 		ret = h27q_rr_init(mtd, &hq27_rr_tables[i]);
