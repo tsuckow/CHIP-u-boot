@@ -535,6 +535,9 @@ extern int soft_i2c_gpio_scl;
 	"console=ttyS0,115200\0" \
 	"usbnet_devaddr=de:ad:be:af:00:01\0" \
 	BOOTCMD_SUNXI_COMPAT \
+	"usbnet_devaddr=de:ad:be:af:00:01\0" \
+	"mtdids=nand0=sunxi-nand.0\0" \
+	"mtdparts=mtdparts=sunxi-nand.0:4m(spl),4m(spl-backup),4m(uboot),4m(env),-(UBI)\0" \
 	BOOTENV
 
 #else /* ifndef CONFIG_SPL_BUILD */
