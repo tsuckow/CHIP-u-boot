@@ -273,8 +273,8 @@ int store_sparse_image(sparse_storage_t *storage, void *storage_priv,
 	sparse_header_t *sparse_header;
 	chunk_header_t *chunk_header;
 	sparse_buffer_t *buffer;
-	uint32_t start;
-	uint32_t total_blocks = 0;
+	uint32_t blks = 0;
+	uint32_t written = 0;
 	uint32_t skipped = 0;
 	int i;
 
