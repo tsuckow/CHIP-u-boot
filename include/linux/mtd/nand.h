@@ -694,6 +694,8 @@ struct nand_chip {
 			int feature_addr, uint8_t *subfeature_para);
 	int (*setup_read_retry)(struct mtd_info *mtd, int retry_mode);
 	void (*manuf_cleanup)(struct mtd_info *mtd);
+	void (*set_slc_mode)(struct mtd_info *mtd, bool enable);
+	void (*fix_page)(struct mtd_info *mtd, int *page);
 
 	void *manuf_priv;
 
@@ -726,6 +728,7 @@ struct nand_chip {
 	struct nand_jedec_params jedec_params;
  
 	int read_retries;
+	bool slc_mode;
 
 	flstate_t state;
 
