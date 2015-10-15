@@ -365,6 +365,43 @@ static void adjust_size_for_badblocks(loff_t *size, loff_t offset, int dev)
 	}
 }
 
+static void adjust_size_for_slc_mode(loff_t *size, loff_t *maxsize,
+				     loff_t offset, int dev)
+{
+	/* We grab the nand info object here fresh because this is usually
+	 * called after arg_off_size() which can change the value of dev.
+	 */
+	nand_info_t *nand = &nand_info[dev];
+	int badblocks = 0, adjerasesize;
+	uint64_t adjchipsize = nand->size;
+	loff_t maxoffset;
+
+	do_div(adjchipsize, nand->slc_mode_ratio);
+
+	maxoffset = *size + offset;
+
+	if (*size + offset > adjchipsize)
+		*size = adjchipsize - offset;
+
+	if (*maxsize + offset > adjchipsize)
+		*size = adjchipsize - offset;
+
+	adjerasesize = nand->erasesize / nand->slc_mode_ratio;
+
+	/* count badblocks in NAND from offset to offset + size */
+	for (; offset < maxoffset; offset += nand->erasesize) {
+		if (nand_block_isbad(nand, offset))
+			badblocks++;
+	}
+
+	/* adjust size if any bad blocks found */
+	if (badblocks) {
+		*size -= badblocks * adjerasesize;
+		printf("size adjusted to 0x%llx (%d bad blocks)\n",
+		       (unsigned long long)*size, badblocks);
+	}
+}
+
 static int do_nand(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	int i, ret = 0;
@@ -546,6 +583,7 @@ static int do_nand(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		int read;
 		int raw = 0;
 		int no_verify = 0;
+		int slc_mode = 0;
 
 		if (argc < 4)
 			goto usage;
@@ -556,6 +594,10 @@ static int do_nand(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		printf("\nNAND %s: ", read ? "read" : "write");
 
 		s = strchr(cmd, '.');
+		if (s && !strncmp(s, ".slc-mode", sizeof(".slc-mode") - 1)) {
+			slc_mode = 1;
+			s = strchr(s + 1, '.');
+		}
 
 		if (s && !strncmp(s, ".raw", 4)) {
 			raw = 1;
@@ -595,8 +637,15 @@ static int do_nand(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 				return 1;
 
 			/* size is unspecified */
-			if (argc < 5)
-				adjust_size_for_badblocks(&size, off, dev);
+			if (argc < 5) {
+				if (slc_mode)
+					adjust_size_for_slc_mode(&size,
+								 &maxsize, off,
+								 dev);
+				else
+					adjust_size_for_badblocks(&size, off,
+								  dev);
+			}
 			rwsize = size;
 		}
 
@@ -607,12 +656,14 @@ static int do_nand(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 			if (read)
 				ret = nand_read_skip_bad(nand, off, &rwsize,
 							 NULL, maxsize,
-							 (u_char *)addr, 0);
+							 (u_char *)addr,
+							 (slc_mode ? WITH_SLC_MODE : 0));
 			else
 				ret = nand_write_skip_bad(nand, off, &rwsize,
 							  NULL, maxsize,
 							  (u_char *)addr,
-							  WITH_WR_VERIFY);
+							  WITH_WR_VERIFY |
+							  (slc_mode ? WITH_SLC_MODE : 0));
 #ifdef CONFIG_CMD_NAND_TRIMFFS
 		} else if (!strcmp(s, ".trimffs")) {
 			if (read) {
@@ -621,7 +672,8 @@ static int do_nand(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 			}
 			ret = nand_write_skip_bad(nand, off, &rwsize, NULL,
 						maxsize, (u_char *)addr,
-						WITH_DROP_FFS | WITH_WR_VERIFY);
+						WITH_DROP_FFS | WITH_WR_VERIFY |
+						(slc_mode ? WITH_SLC_MODE : 0));
 #endif
 		} else if (!strcmp(s, ".oob")) {
 			/* out-of-band data */
@@ -757,15 +809,18 @@ usage:
 static char nand_help_text[] =
 	"info - show available NAND devices\n"
 	"nand device [dev] - show or set current device\n"
-	"nand read - addr off|partition size\n"
-	"nand write - addr off|partition size\n"
+	"nand read[.slc-mode] - addr off|partition size\n"
+	"nand write[.slc-mode] - addr off|partition size\n"
+	"    With '.slc-mode, the operation is done in SLC mode\n"
+	"    'size' includes skipped bad blocks.\n"
 	"    read/write 'size' bytes starting at offset 'off'\n"
 	"    to/from memory address 'addr', skipping bad blocks.\n"
 	"nand read.raw - addr off|partition [count]\n"
 	"nand write.raw[.noverify] - addr off|partition [count]\n"
 	"    Use read.raw/write.raw to avoid ECC and access the flash as-is.\n"
 #ifdef CONFIG_CMD_NAND_TRIMFFS
-	"nand write.trimffs - addr off|partition size\n"
+	"nand write[.slc-mode].trimffs - addr off|partition size\n"
+	"    With '.slc-mode, the operation is done in SLC mode\n"
 	"    write 'size' bytes starting at offset 'off' from memory address\n"
 	"    'addr', skipping bad blocks and dropping any pages at the end\n"
 	"    of eraseblocks that contain only 0xFF\n"
