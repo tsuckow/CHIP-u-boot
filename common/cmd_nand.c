@@ -607,7 +607,7 @@ static int do_nand(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 			if (read)
 				ret = nand_read_skip_bad(nand, off, &rwsize,
 							 NULL, maxsize,
-							 (u_char *)addr);
+							 (u_char *)addr, 0);
 			else
 				ret = nand_write_skip_bad(nand, off, &rwsize,
 							  NULL, maxsize,
@@ -831,7 +831,7 @@ static int nand_load_image(cmd_tbl_t *cmdtp, nand_info_t *nand,
 
 	cnt = nand->writesize;
 	r = nand_read_skip_bad(nand, offset, &cnt, NULL, nand->size,
-			(u_char *)addr);
+			(u_char *)addr, 0);
 	if (r) {
 		puts("** Read error\n");
 		bootstage_error(BOOTSTAGE_ID_NAND_HDR_READ);
@@ -866,7 +866,7 @@ static int nand_load_image(cmd_tbl_t *cmdtp, nand_info_t *nand,
 	bootstage_mark(BOOTSTAGE_ID_NAND_TYPE);
 
 	r = nand_read_skip_bad(nand, offset, &cnt, NULL, nand->size,
-			(u_char *)addr);
+			(u_char *)addr, 0);
 	if (r) {
 		puts("** Read error\n");
 		bootstage_error(BOOTSTAGE_ID_NAND_READ);

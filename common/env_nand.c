@@ -260,7 +260,7 @@ static int readenv(size_t offset, u_char *buf)
 			char_ptr = &buf[amount_loaded];
 			if (nand_read_skip_bad(&nand_info[0], offset,
 					       &len, NULL,
-					       nand_info[0].size, char_ptr))
+					       nand_info[0].size, char_ptr, 0))
 				return 1;
 
 			offset += blocksize;
