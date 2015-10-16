@@ -17,7 +17,7 @@ typedef struct sparse_storage {
 
 	int	(*write)(struct sparse_storage *storage, void *priv,
 			 unsigned int offset, unsigned int size,
-			 char *data);
+			 char *data, unsigned int *new_offset);
 } sparse_storage_t;
 
 static inline int is_sparse_image(void *buf)
