@@ -52,7 +52,8 @@ static int fb_mmc_sparse_write(struct sparse_storage *storage,
 			       void *priv,
 			       unsigned int offset,
 			       unsigned int size,
-			       char *data)
+			       char *data,
+			       unsigned int *new_offset)
 {
 	struct fb_mmc_sparse *sparse = priv;
 	block_dev_desc_t *dev_desc = sparse->dev_desc;
@@ -62,6 +63,7 @@ static int fb_mmc_sparse_write(struct sparse_storage *storage,
 	if (!ret)
 		return -EIO;
 
+	*new_offset = offset + size;
 	return ret;
 }
 
