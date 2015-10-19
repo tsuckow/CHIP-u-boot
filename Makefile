@@ -1085,6 +1085,10 @@ OBJCOPYFLAGS_u-boot-sunxi-with-spl.bin = -I binary -O binary \
 u-boot-sunxi-with-spl.bin: spl/sunxi-spl.bin \
 			u-boot$(if $(CONFIG_OF_CONTROL),-dtb,).img FORCE
 	$(call if_changed,pad_cat)
+
+OBJCOPYFLAGS_u-boot-sunxi-padded.bin = -I binary -O binary --pad-to=0xc0000 --gap-fill=0
+u-boot-sunxi-padded.bin: u-boot$(if $(CONFIG_OF_CONTROL),-dtb,).bin /dev/null FORCE
+	$(call if_changed,pad_cat)
 endif
 
 ifneq ($(CONFIG_TEGRA),)
