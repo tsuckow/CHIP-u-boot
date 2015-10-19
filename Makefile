@@ -1332,6 +1332,9 @@ spl/u-boot-spl: tools prepare $(if $(CONFIG_OF_SEPARATE),dts/dt.dtb)
 spl/sunxi-spl.bin: spl/u-boot-spl
 	@:
 
+spl/sunxi-spl-with-ecc.bin: spl/sunxi-spl.bin
+	@:
+
 spl/u-boot-spl-dtb.sfp: spl/u-boot-spl
 	@:
 

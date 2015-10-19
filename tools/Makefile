@@ -146,6 +146,7 @@ hostprogs-$(CONFIG_MX23) += mxsboot
 hostprogs-$(CONFIG_MX28) += mxsboot
 HOSTCFLAGS_mxsboot.o := -pedantic
 
+hostprogs-$(CONFIG_SUNXI) += sunxi-spl-image-builder
 hostprogs-$(CONFIG_SUNXI) += mksunxiboot
 
 hostprogs-$(CONFIG_NETCONSOLE) += ncb

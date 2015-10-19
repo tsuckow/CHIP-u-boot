@@ -151,6 +151,7 @@ endif
 
 ifdef CONFIG_SUNXI
 ALL-y	+= $(obj)/sunxi-spl.bin
+ALL-y	+= $(obj)/sunxi-spl-with-ecc.bin
 endif
 
 ifeq ($(CONFIG_SYS_SOC),"at91")
@@ -232,6 +233,24 @@ quiet_cmd_mksunxiboot = MKSUNXI $@
 cmd_mksunxiboot = $(objtree)/tools/mksunxiboot $< $@
 $(obj)/sunxi-spl.bin: $(obj)/$(SPL_BIN).bin
 	$(call if_changed,mksunxiboot)
+
+SUNXI_NAND_SPL_ECC_STRENGTH ?= 64
+SUNXI_NAND_SPL_ECC_SIZE ?= 1024
+SUNXI_NAND_PAGE_SIZE ?= 16384
+SUNXI_NAND_OOB_SIZE ?= 1664
+SUNXI_NAND_SPL_REPEAT ?= 3
+SUNXI_NAND_SPL_USABLE_PAGE_SIZE ?= 4096
+quiet_cmd_sunxi_spl_image_builder = SUNXI_SPL_IMAGE_BUILDER $@
+cmd_sunxi_spl_image_builder = $(objtree)/tools/sunxi-spl-image-builder \
+				-s $(SUNXI_NAND_SPL_ECC_STRENGTH) \
+				-c $(SUNXI_NAND_SPL_ECC_SIZE) \
+				-p $(SUNXI_NAND_PAGE_SIZE) \
+				-o $(SUNXI_NAND_OOB_SIZE) \
+				-r $(SUNXI_NAND_SPL_REPEAT) \
+				-u $(SUNXI_NAND_SPL_USABLE_PAGE_SIZE) \
+				-d $< $@
+$(obj)/sunxi-spl-with-ecc.bin: $(obj)/sunxi-spl.bin
+	$(call if_changed,sunxi_spl_image_builder)
 endif
 
 quiet_cmd_u-boot-spl = LD      $@
