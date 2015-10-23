@@ -156,8 +156,8 @@ void fb_nand_flash_write(const char *partname, unsigned int session_id,
 		sparse_priv.part = part;
 
 		sparse.block_sz = nand->writesize;
-		sparse.start = part->offset / sparse.block_sz;
-		sparse.size = part->size  / sparse.block_sz;
+		sparse.start = lldiv(part->offset, sparse.block_sz);
+		sparse.size = lldiv(part->size, sparse.block_sz);
 		sparse.name = part->name;
 		sparse.write = fb_nand_sparse_write;
 
