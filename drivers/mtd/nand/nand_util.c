@@ -559,11 +559,13 @@ int nand_verify(nand_info_t *nand, loff_t ofs, size_t len, u_char *buf,
 	size_t verofs;
 	size_t verlen = nand->writesize;
 	uint8_t *verbuf = memalign(ARCH_DMA_MINALIGN, verlen);
-	int adjblocksize = nand->erasesize / nand->slc_mode_ratio;
+	int adjblocksize = nand->erasesize;
 
 	if (!verbuf)
 		return -ENOMEM;
 
+	if (flags & WITH_SLC_MODE)
+		adjblocksize /=  nand->slc_mode_ratio;
 	/* Read the NAND back in page-size groups to limit malloc size */
 	for (verofs = ofs; len; len -= verlen, buf += verlen) {
 		verlen = min(nand->writesize, len);
