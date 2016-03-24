@@ -587,7 +587,8 @@ int fdtdec_get_alias_seq(const void *blob, const char *base, int offset,
 		slash = strrchr(prop, '/');
 		if (strcmp(slash + 1, find_name))
 			continue;
-		val = trailing_strtol(name);
+
+		val = simple_strtol(name + base_len, NULL, 10);
 		if (val != -1) {
 			*seqp = val;
 			debug("Found seq %d\n", *seqp);

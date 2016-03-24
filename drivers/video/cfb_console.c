@@ -2189,6 +2189,11 @@ __weak int board_video_skip(void)
 	return 0;
 }
 
+__weak int board_video_pre_init(void)
+{
+	return 0;
+}
+
 int drv_video_init(void)
 {
 	struct stdio_dev console_dev;
@@ -2197,6 +2202,10 @@ int drv_video_init(void)
 
 	/* Check if video initialization should be skipped */
 	if (board_video_skip())
+		return 0;
+
+	/* Allow the board to setup a few things */
+	if (board_video_pre_init())
 		return 0;
 
 	/* Init video chip - returns with framebuffer cleared */

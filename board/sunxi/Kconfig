@@ -583,4 +583,13 @@ config SPL_STACK_R_ADDR
 	default 0x4fe00000 if MACH_SUN4I || MACH_SUN5I || MACH_SUN6I || MACH_SUN7I || MACH_SUN8I
 	default 0x2fe00000 if MACH_SUN9I
 
+config CHIP_DIP
+	bool "Enable NextThing's CHIP DIP support"
+	depends on W1_GPIO
+	depends on EEPROM_DS2431
+	---help---
+	The NextThing's CHIP allows to plug expansion boards. These boards can
+	be enumerated at runtime through a 1-Wire bus, each board having an
+	EEPROM connected to it, holding data to identify the board holding it.
+
 endif

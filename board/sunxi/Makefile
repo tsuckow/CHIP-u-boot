@@ -9,6 +9,7 @@
 # SPDX-License-Identifier:	GPL-2.0+
 #
 obj-y	+= board.o
+obj-$(CONFIG_CHIP_DIP)		+= dip.o
 obj-$(CONFIG_SUNXI_GMAC)	+= gmac.o
 obj-$(CONFIG_SUNXI_AHCI)	+= ahci.o
 obj-$(CONFIG_MACH_SUN4I)	+= dram_sun4i_auto.o
