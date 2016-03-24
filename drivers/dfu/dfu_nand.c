@@ -48,7 +48,7 @@ static int nand_block_op(enum dfu_op op, struct dfu_entity *dfu,
 
 	if (op == DFU_OP_READ) {
 		ret = nand_read_skip_bad(nand, start, &count, &actual,
-				lim, buf);
+				lim, buf, 0);
 	} else {
 		nand_erase_options_t opts;
 

@@ -100,7 +100,7 @@ int dram_init(void)
 	return 0;
 }
 
-#if defined(CONFIG_NAND_SUNXI) && defined(CONFIG_SPL_BUILD)
+#ifdef CONFIG_NAND_SUNXI
 static void nand_pinmux_setup(void)
 {
 	unsigned int pin;
@@ -133,12 +133,19 @@ static void nand_clock_setup(void)
 	setbits_le32(&ccm->nand0_clk_cfg, CCM_NAND_CTRL_ENABLE | AHB_DIV_1);
 }
 
+#ifndef CONFIG_SPL_BUILD
+void sunxi_nand_init(void);
+#endif
+
 void board_nand_init(void)
 {
 	nand_pinmux_setup();
 	nand_clock_setup();
-}
+#ifndef CONFIG_SPL_BUILD
+	sunxi_nand_init();
 #endif
+}
+#endif /* ifdef CONFIG_NAND_SUNXI */
 
 #ifdef CONFIG_GENERIC_MMC
 static void mmc_pinmux_setup(int sdc)

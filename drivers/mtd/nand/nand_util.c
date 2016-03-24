@@ -408,12 +408,25 @@ int nand_unlock(struct mtd_info *mtd, loff_t start, size_t length,
  *        -1 if the image does not fit
  */
 static int check_skip_len(nand_info_t *nand, loff_t offset, size_t length,
-		size_t *used)
+		size_t *used, int flags)
 {
-	size_t len_excl_bad = 0;
-	int ret = 0;
+	int adjerasesize = nand->erasesize;
+	size_t adjlength, len_excl_bad = 0;
+	int nblocks, ret = 0;
+	u64 tmp = offset;
 
-	while (len_excl_bad < length) {
+	if (flags & WITH_SLC_MODE)
+		adjerasesize /= nand->slc_mode_ratio;
+
+	adjlength = adjerasesize - do_div(tmp, adjerasesize);
+	if (adjlength > length)
+		adjlength = length;
+
+	nblocks = (length - adjlength) / adjerasesize;
+	adjlength += (length - adjlength) % adjerasesize;
+	adjlength += nblocks * nand->erasesize;
+
+	while (len_excl_bad < adjlength) {
 		size_t block_len, block_off;
 		loff_t block_start;
 
@@ -434,8 +447,13 @@ static int check_skip_len(nand_info_t *nand, loff_t offset, size_t length,
 	}
 
 	/* If the length is not a multiple of block_len, adjust. */
-	if (len_excl_bad > length)
-		*used -= (len_excl_bad - length);
+	if (len_excl_bad > adjlength) {
+		*used -= (len_excl_bad - adjlength);
+		offset += (len_excl_bad - adjlength);
+	}
+
+	if ((offset & nand->erasesize_mask) >= adjerasesize)
+		*used += nand->erasesize - (offset & nand->erasesize_mask);
 
 	return ret;
 }
@@ -502,6 +520,24 @@ int nand_verify_page_oob(nand_info_t *nand, struct mtd_oob_ops *ops, loff_t ofs)
 	return rval ? -EIO : 0;
 }
 
+static int nand_read_with_flags(nand_info_t *info, loff_t ofs, size_t *len,
+				u_char *buf, int flags)
+{
+	if (flags & WITH_SLC_MODE)
+		return nand_read_slc_mode(info, ofs, len, buf);
+
+	return nand_read(info, ofs, len, buf);
+}
+
+static int nand_write_with_flags(nand_info_t *info, loff_t ofs, size_t *len,
+				 u_char *buf, int flags)
+{
+	if (flags & WITH_SLC_MODE)
+		return nand_write_slc_mode(info, ofs, len, buf);
+
+	return nand_write(info, ofs, len, buf);
+}
+
 /**
  * nand_verify:
  *
@@ -516,26 +552,35 @@ int nand_verify_page_oob(nand_info_t *nand, struct mtd_oob_ops *ops, loff_t ofs)
  * @param buf		buffer to read from
  * @return		0 in case of success
  */
-int nand_verify(nand_info_t *nand, loff_t ofs, size_t len, u_char *buf)
+int nand_verify(nand_info_t *nand, loff_t ofs, size_t len, u_char *buf,
+		int flags)
 {
 	int rval = 0;
 	size_t verofs;
 	size_t verlen = nand->writesize;
 	uint8_t *verbuf = memalign(ARCH_DMA_MINALIGN, verlen);
+	int adjblocksize = nand->erasesize;
 
 	if (!verbuf)
 		return -ENOMEM;
 
+	if (flags & WITH_SLC_MODE)
+		adjblocksize /=  nand->slc_mode_ratio;
 	/* Read the NAND back in page-size groups to limit malloc size */
-	for (verofs = ofs; verofs < ofs + len;
-	     verofs += verlen, buf += verlen) {
-		verlen = min(nand->writesize, (uint32_t)(ofs + len - verofs));
-		rval = nand_read(nand, verofs, &verlen, verbuf);
+	for (verofs = ofs; len; len -= verlen, buf += verlen) {
+		verlen = min(nand->writesize, len);
+		rval = nand_read_with_flags(nand, verofs, &verlen, verbuf,
+					    flags);
 		if (!rval || (rval == -EUCLEAN))
 			rval = memcmp(buf, verbuf, verlen);
 
 		if (rval)
 			break;
+
+		verofs += verlen;
+		if ((verofs & nand->erasesize_mask) >= adjblocksize)
+			verofs += nand->erasesize -
+				  (verofs & nand->erasesize_mask);
 	}
 
 	free(verbuf);
@@ -572,7 +617,7 @@ int nand_verify(nand_info_t *nand, loff_t ofs, size_t len, u_char *buf)
 int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 		size_t *actual, loff_t lim, u_char *buffer, int flags)
 {
-	int rval = 0, blocksize;
+	int rval = 0, blocksize, adjblocksize;
 	size_t left_to_write = *length;
 	size_t used_for_write = 0;
 	u_char *p_buffer = buffer;
@@ -582,6 +627,7 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 		*actual = 0;
 
 	blocksize = nand->erasesize;
+	adjblocksize = blocksize / nand->slc_mode_ratio;
 
 	/*
 	 * nand_write() handles unaligned, partial page writes.
@@ -600,7 +646,8 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 		return -EINVAL;
 	}
 
-	need_skip = check_skip_len(nand, offset, *length, &used_for_write);
+	need_skip = check_skip_len(nand, offset, *length,
+				   &used_for_write, flags);
 
 	if (actual)
 		*actual = used_for_write;
@@ -618,10 +665,12 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 	}
 
 	if (!need_skip && !(flags & WITH_DROP_FFS)) {
-		rval = nand_write(nand, offset, length, buffer);
+		rval = nand_write_with_flags(nand, offset, length, buffer,
+					     flags);
 
 		if ((flags & WITH_WR_VERIFY) && !rval)
-			rval = nand_verify(nand, offset, *length, buffer);
+			rval = nand_verify(nand, offset, *length, buffer,
+					   flags);
 
 		if (rval == 0)
 			return 0;
@@ -645,10 +694,10 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 			continue;
 		}
 
-		if (left_to_write < (blocksize - block_offset))
+		if (left_to_write < (adjblocksize - block_offset))
 			write_size = left_to_write;
 		else
-			write_size = blocksize - block_offset;
+			write_size = adjblocksize - block_offset;
 
 		truncated_write_size = write_size;
 #ifdef CONFIG_CMD_NAND_TRIMFFS
@@ -657,14 +706,17 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 					&write_size);
 #endif
 
-		rval = nand_write(nand, offset, &truncated_write_size,
-				p_buffer);
+		rval = nand_write_with_flags(nand, offset,
+				&truncated_write_size,
+				p_buffer, flags);
 
 		if ((flags & WITH_WR_VERIFY) && !rval)
 			rval = nand_verify(nand, offset,
-				truncated_write_size, p_buffer);
+				truncated_write_size, p_buffer, flags);
 
 		offset += write_size;
+		if (write_size == adjblocksize - block_offset)
+			offset += blocksize - adjblocksize;
 		p_buffer += write_size;
 
 		if (rval != 0) {
@@ -701,12 +753,14 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
  * @param lim maximum size that actual may be in order to not exceed the
  * buffer
  * @param buffer buffer to write to
+ * @flags flags changing the function behavior. Currently, only WITH_SLC_MODE
+ * is supported
  * @return 0 in case of success
  */
 int nand_read_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
-		size_t *actual, loff_t lim, u_char *buffer)
+		size_t *actual, loff_t lim, u_char *buffer, int flags)
 {
-	int rval;
+	int rval, adjblocksize;
 	size_t left_to_read = *length;
 	size_t used_for_read = 0;
 	u_char *p_buffer = buffer;
@@ -720,7 +774,9 @@ int nand_read_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 		return -EINVAL;
 	}
 
-	need_skip = check_skip_len(nand, offset, *length, &used_for_read);
+	adjblocksize = nand->erasesize / nand->slc_mode_ratio;
+	need_skip = check_skip_len(nand, offset, *length, &used_for_read,
+				   flags);
 
 	if (actual)
 		*actual = used_for_read;
@@ -738,7 +794,8 @@ int nand_read_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 	}
 
 	if (!need_skip) {
-		rval = nand_read(nand, offset, length, buffer);
+		rval = nand_read_with_flags(nand, offset, length, buffer,
+					    flags);
 		if (!rval || rval == -EUCLEAN)
 			return 0;
 
@@ -761,12 +818,13 @@ int nand_read_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 			continue;
 		}
 
-		if (left_to_read < (nand->erasesize - block_offset))
+		if (left_to_read < (adjblocksize - block_offset))
 			read_length = left_to_read;
 		else
-			read_length = nand->erasesize - block_offset;
+			read_length = adjblocksize - block_offset;
 
-		rval = nand_read(nand, offset, &read_length, p_buffer);
+		rval = nand_read_with_flags(nand, offset, &read_length,
+					    p_buffer, flags);
 		if (rval && rval != -EUCLEAN) {
 			printf("NAND read from offset %llx failed %d\n",
 				offset, rval);
@@ -776,6 +834,8 @@ int nand_read_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 
 		left_to_read -= read_length;
 		offset       += read_length;
+		if (read_length == adjblocksize - block_offset)
+			offset += nand->erasesize - adjblocksize;
 		p_buffer     += read_length;
 	}
 

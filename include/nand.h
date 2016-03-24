@@ -60,6 +60,18 @@ static inline int nand_write(nand_info_t *info, loff_t ofs, size_t *len, u_char 
 	return mtd_write(info, ofs, *len, (size_t *)len, buf);
 }
 
+static inline int nand_read_slc_mode(nand_info_t *info, loff_t ofs,
+				     size_t *len, u_char *buf)
+{
+	return mtd_read_slc_mode(info, ofs, *len, (size_t *)len, buf);
+}
+
+static inline int nand_write_slc_mode(nand_info_t *info, loff_t ofs,
+				      size_t *len, u_char *buf)
+{
+	return mtd_write_slc_mode(info, ofs, *len, (size_t *)len, buf);
+}
+
 static inline int nand_block_isbad(nand_info_t *info, loff_t ofs)
 {
 	return mtd_block_isbad(info, ofs);
@@ -101,19 +113,20 @@ struct nand_erase_options {
 
 typedef struct nand_erase_options nand_erase_options_t;
 
-int nand_read_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
-		       size_t *actual, loff_t lim, u_char *buffer);
-
 #define WITH_DROP_FFS	(1 << 0) /* drop trailing all-0xff pages */
 #define WITH_WR_VERIFY	(1 << 1) /* verify data was written correctly */
+#define WITH_SLC_MODE	(1 << 2) /* read/write MLC NAND in SLC mode */
 
+int nand_read_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
+		       size_t *actual, loff_t lim, u_char *buffer, int flags);
 int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 			size_t *actual, loff_t lim, u_char *buffer, int flags);
 int nand_erase_opts(nand_info_t *meminfo, const nand_erase_options_t *opts);
 int nand_torture(nand_info_t *nand, loff_t offset);
 int nand_verify_page_oob(nand_info_t *nand, struct mtd_oob_ops *ops,
 			loff_t ofs);
-int nand_verify(nand_info_t *nand, loff_t ofs, size_t len, u_char *buf);
+int nand_verify(nand_info_t *nand, loff_t ofs, size_t len, u_char *buf,
+		int flags);
 
 #define NAND_LOCK_STATUS_TIGHT	0x01
 #define NAND_LOCK_STATUS_UNLOCK 0x04

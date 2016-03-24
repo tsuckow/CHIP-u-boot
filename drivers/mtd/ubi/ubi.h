@@ -600,6 +600,7 @@ struct ubi_device {
 	long long flash_size;
 	int peb_count;
 	int peb_size;
+	int usable_peb_size;
 	int bad_peb_count;
 	int good_peb_count;
 	int corr_peb_count;
@@ -611,7 +612,9 @@ struct ubi_device {
 	int leb_size;
 	int leb_start;
 	int ec_hdr_alsize;
+	int ec_rd_hdr_alsize;
 	int vid_hdr_alsize;
+	int vid_rd_hdr_alsize;
 	int vid_hdr_offset;
 	int vid_hdr_aloffset;
 	int vid_hdr_shift;

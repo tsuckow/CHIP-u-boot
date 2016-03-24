@@ -1085,6 +1085,10 @@ OBJCOPYFLAGS_u-boot-sunxi-with-spl.bin = -I binary -O binary \
 u-boot-sunxi-with-spl.bin: spl/sunxi-spl.bin \
 			u-boot$(if $(CONFIG_OF_CONTROL),-dtb,).img FORCE
 	$(call if_changed,pad_cat)
+
+OBJCOPYFLAGS_u-boot-sunxi-padded.bin = -I binary -O binary --pad-to=0xc0000 --gap-fill=0
+u-boot-sunxi-padded.bin: u-boot$(if $(CONFIG_OF_CONTROL),-dtb,).bin /dev/null FORCE
+	$(call if_changed,pad_cat)
 endif
 
 ifneq ($(CONFIG_TEGRA),)
@@ -1330,6 +1334,9 @@ spl/u-boot-spl: tools prepare $(if $(CONFIG_OF_SEPARATE),dts/dt.dtb)
 	$(Q)$(MAKE) obj=spl -f $(srctree)/scripts/Makefile.spl all
 
 spl/sunxi-spl.bin: spl/u-boot-spl
+	@:
+
+spl/sunxi-spl-with-ecc.bin: spl/sunxi-spl.bin
 	@:
 
 spl/u-boot-spl-dtb.sfp: spl/u-boot-spl

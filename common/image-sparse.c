@@ -273,8 +273,8 @@ int store_sparse_image(sparse_storage_t *storage, void *storage_priv,
 	sparse_header_t *sparse_header;
 	chunk_header_t *chunk_header;
 	sparse_buffer_t *buffer;
-	uint32_t start;
-	uint32_t total_blocks = 0;
+	uint32_t blks = 0;
+	uint32_t written = 0;
 	uint32_t skipped = 0;
 	int i;
 
@@ -308,12 +308,12 @@ int store_sparse_image(sparse_storage_t *storage, void *storage_priv,
 	 * the partition. If not, then simply resume where we were.
 	 */
 	if (session_id > 0)
-		start = last_offset;
+		blks = last_offset;
 	else
-		start = storage->start;
+		blks = storage->start;
 
 	printf("Flashing sparse image on partition %s at offset 0x%x (ID: %d)\n",
-	       storage->name, start * storage->block_sz, session_id);
+	       storage->name, blks * storage->block_sz, session_id);
 
 	/* Start processing chunks */
 	for (chunk = 0; chunk < sparse_header->total_chunks; chunk++) {
@@ -344,8 +344,10 @@ int store_sparse_image(sparse_storage_t *storage, void *storage_priv,
 
 		blkcnt = (buffer->length / storage->block_sz) * buffer->repeat;
 
-		if ((start + total_blocks + blkcnt) >
-		    (storage->start + storage->size)) {
+		printf("start 0x%x blkcnt 0x%x partition 0x%x size 0x%x\n",
+		       blks, blkcnt, storage->start, storage->size);
+
+		if ((blks + blkcnt) > (storage->start + storage->size)) {
 			printf("%s: Request would exceed partition size!\n",
 			       __func__);
 			return -EINVAL;
@@ -353,41 +355,50 @@ int store_sparse_image(sparse_storage_t *storage, void *storage_priv,
 
 		for (i = 0; i < buffer->repeat; i++) {
 			unsigned long buffer_blk_cnt;
+			unsigned int next_offset;
 			int ret;
 
 			buffer_blk_cnt = buffer->length / storage->block_sz;
 
 			ret = storage->write(storage, storage_priv,
-					     start + total_blocks,
+					     blks,
 					     buffer_blk_cnt,
-					     buffer->data);
+					     buffer->data,
+					     &next_offset);
 			if (ret < 0) {
 				printf("%s: Write %d failed %d\n",
 				       __func__, i, ret);
 				return ret;
 			}
 
-			total_blocks += ret;
+			if (ret < buffer_blk_cnt) {
+				printf("%s: Wrote less blocks (%d) than expected (%lu)\n",
+				       __func__, ret, buffer_blk_cnt);
+				return -EIO;
+			}
+
+			blks = next_offset;
+			written += ret;
 		}
 
 		sparse_put_data_buffer(buffer);
 	}
 
 	debug("Wrote %d blocks, skipped %d, expected to write %d blocks\n",
-	      total_blocks, skipped,
+	      written, skipped,
 	      sparse_block_size_to_storage(sparse_header->total_blks,
 					   storage, sparse_header));
-	printf("........ wrote %d blocks to '%s'\n", total_blocks,
+	printf("........ wrote %d blocks to '%s'\n", written,
 	       storage->name);
 
-	if ((total_blocks + skipped) !=
+	if ((written + skipped) !=
 	    sparse_block_size_to_storage(sparse_header->total_blks,
 					 storage, sparse_header)) {
 		printf("sparse image write failure\n");
 		return -EIO;
 	}
 
-	last_offset = start + total_blocks;
+	last_offset = blks;
 
 	return 0;
 }
