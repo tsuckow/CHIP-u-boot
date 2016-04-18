@@ -57,6 +57,7 @@ static struct f_fastboot *fastboot_func;
 static unsigned int fastboot_flash_session_id;
 static unsigned int download_size;
 static unsigned int download_bytes;
+static unsigned int upload_bytes;
 static bool is_high_speed;
 
 static struct usb_endpoint_descriptor fs_ep_in = {
@@ -406,6 +407,20 @@ static void cb_getvar(struct usb_ep *ep, struct usb_request *req)
 		 * Reset our session counter.
 		 */
 		fastboot_flash_session_id = 0;
+	} else if (!strcmp_l1("max-upload-size", cmd)) {
+		char str_num[12];
+
+		sprintf(str_num, "0x%08x", CONFIG_FASTBOOT_BUF_SIZE);
+		strncat(response, str_num, chars_left);
+
+		/*
+		 * This also indicates the start of a new flashing
+		 * "session", in which we could have 1-N buffers to
+		 * write to a partition.
+		 *
+		 * Reset our session counter.
+		 */
+		fastboot_flash_session_id = 0;
 	} else if (!strcmp_l1("serialno", cmd)) {
 		s = getenv("serial#");
 		if (s)
@@ -580,6 +595,31 @@ static void cb_flash(struct usb_ep *ep, struct usb_request *req)
 	fastboot_flash_session_id++;
 	fastboot_tx_write_str(response);
 }
+
+static void cb_dump(struct usb_ep *ep, struct usb_request *req)
+{
+	char *cmd = req->buf;
+	char response[FASTBOOT_RESPONSE_LEN];
+
+	strsep(&cmd, ":");
+	if (!cmd) {
+		error("missing partition name\n");
+		fastboot_tx_write_str("FAILmissing partition name");
+		return;
+	}
+
+	strcpy(response, "FAILno flash device defined");
+#ifdef CONFIG_FASTBOOT_FLASH_MMC_DEV
+	#error Not Implemented
+#endif
+#ifdef CONFIG_FASTBOOT_FLASH_NAND_DEV
+	fb_nand_flash_read(cmd, fastboot_flash_session_id,
+			    (void *)CONFIG_FASTBOOT_BUF_ADDR,
+			    upload_bytes, response);
+#endif
+	fastboot_flash_session_id++;
+	fastboot_tx_write_str(response);
+}
 #endif
 
 static void cb_oem(struct usb_ep *ep, struct usb_request *req)
@@ -658,6 +698,9 @@ static const struct cmd_dispatch_info cmd_dispatch_info[] = {
 	}, {
 		.cmd = "erase",
 		.cb = cb_erase,
+	}, {
+		.cmd = "dump",
+		.cb = cb_dump,
 	},
 #endif
 	{
