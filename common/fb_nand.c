@@ -28,6 +28,11 @@ __weak int board_fastboot_erase_partition_setup(char *name)
 	return 0;
 }
 
+__weak int board_fastboot_read_partition_setup(char *name)
+{
+	return 0;
+}
+
 __weak int board_fastboot_write_partition_setup(char *name)
 {
 	return 0;
@@ -88,6 +93,95 @@ static int _fb_nand_erase(nand_info_t *nand, struct part_info *part)
 	       part->size, part->name);
 
 	return 0;
+}
+
+static int _fb_nand_raw_read(nand_info_t *nand, unsigned int offset,
+			      void *buffer, unsigned int length)
+{
+	unsigned int page_count;
+	int ret, i;
+
+	page_count = length / nand->readsize;
+
+	for (i = 0; i < page_count; i++) {
+		mtd_oob_ops_t ops = {
+			.datbuf = (u8 *)buffer,
+			.oobbuf = ((u8 *)buffer) + nand->readsize,
+			.len = nand->readsize,
+			.ooblen = nand->oobsize,
+			.mode = MTD_OPS_RAW
+		};
+
+		ret = mtd_read_oob(nand, offset, &ops);
+		if (ret) {
+			printf("%s: error at offset %llx, ret %d\n",
+			       __func__, (long long)offset, ret);
+			break;
+		}
+
+		buffer += nand->readsize + nand->oobsize;
+		offset += nand->readsize;
+	}
+
+	return 0;
+}
+
+static int _fb_nand_read(nand_info_t *nand, struct part_info *part,
+			  void *buffer, unsigned int offset,
+			  unsigned int length, size_t *written)
+{
+	int flags = 0;
+
+	if (!strcmp(part->name, "spl") || !strcmp(part->name, "spl-backup")) {
+		*written = length;
+		return _fb_nand_raw_read(nand, offset, buffer, length);
+	}
+
+	if (!strcmp(part->name, "UBI"))
+		flags |= WITH_SLC_MODE;
+
+	return nand_read_skip_bad(nand, offset, &length, written,
+				   part->size - (offset - part->offset),
+				   buffer, flags);
+}
+
+void fb_nand_flash_read(const char *partname, unsigned int session_id,
+			 void *upload_buffer, unsigned int upload_bytes,
+			 char *response)
+{
+	struct part_info *part;
+	nand_info_t *nand = NULL;
+	int ret;
+
+	/* initialize the response buffer */
+	response_str = response;
+
+	ret = fb_nand_lookup(partname, response, &nand, &part);
+	if (ret) {
+		error("invalid NAND device");
+		fastboot_fail(response_str, "invalid NAND device");
+		return;
+	}
+
+	ret = board_fastboot_read_partition_setup(part->name);
+	if (ret)
+		return;
+
+	printf("Reading raw Flash image at offset 0x%llx\n",
+	       part->offset);
+
+	ret = _fb_nand_read(nand, part, upload_buffer, part->offset,
+			     upload_bytes, NULL);
+
+	printf("........ read %u bytes to '%s'\n",
+	       upload_bytes, part->name);
+
+	if (ret) {
+		fastboot_fail(response_str, "error reading the image");
+		return;
+	}
+
+	fastboot_okay(response_str, "");
 }
 
 static int _fb_nand_raw_write(nand_info_t *nand, unsigned int offset,
