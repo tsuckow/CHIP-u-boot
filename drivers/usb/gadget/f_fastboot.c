@@ -508,6 +508,35 @@ static void rx_handler_dl_image(struct usb_ep *ep, struct usb_request *req)
 	usb_ep_queue(ep, req, 0);
 }
 
+static void cb_upload(struct usb_ep *ep, struct usb_request *req)
+{
+	char *cmd = req->buf;
+	char response[FASTBOOT_RESPONSE_LEN];
+	unsigned int max;
+
+	strsep(&cmd, ":");
+	upload_size = simple_strtoul(cmd, NULL, 16);
+	upload_bytes = 0;
+
+	printf("Starting upload of %d bytes\n", upload_size);
+
+	if (0 == upload_size) {
+		sprintf(response, "FAILdata invalid size");
+	} else if (download_size > CONFIG_FASTBOOT_BUF_SIZE) {
+		upload_size = 0;
+		sprintf(response, "FAILdata too large");
+	} else {
+		sprintf(response, "DATA%08x", download_size);
+		req->complete = rx_handler_ul_image;
+		max = is_high_speed ? hs_ep_out.wMaxPacketSize :
+			fs_ep_out.wMaxPacketSize;
+		req->length = rx_bytes_expected(max);
+		if (req->length < ep->maxpacket)
+			req->length = ep->maxpacket;
+	}
+	fastboot_tx_write_str(response);
+}
+
 static void cb_download(struct usb_ep *ep, struct usb_request *req)
 {
 	char *cmd = req->buf;
