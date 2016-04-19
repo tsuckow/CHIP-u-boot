@@ -181,7 +181,9 @@ void fb_nand_flash_read(const char *partname, unsigned int session_id,
 		return;
 	}
 
-	fastboot_okay(response_str, "");
+	char str_num[12];
+	sprintf(str_num, "0x%08x", upload_bytes);
+	fastboot_okay(response_str, str_num);
 }
 
 static int _fb_nand_raw_write(nand_info_t *nand, unsigned int offset,

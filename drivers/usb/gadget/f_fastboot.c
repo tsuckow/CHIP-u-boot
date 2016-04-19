@@ -55,6 +55,7 @@ static inline struct f_fastboot *func_to_fastboot(struct usb_function *f)
 
 static struct f_fastboot *fastboot_func;
 static unsigned int fastboot_flash_session_id;
+static unsigned int upload_size;
 static unsigned int download_size;
 static unsigned int download_bytes;
 static unsigned int upload_bytes;
@@ -511,30 +512,27 @@ static void rx_handler_dl_image(struct usb_ep *ep, struct usb_request *req)
 static void cb_upload(struct usb_ep *ep, struct usb_request *req)
 {
 	char *cmd = req->buf;
-	char response[FASTBOOT_RESPONSE_LEN];
-	unsigned int max;
-
 	strsep(&cmd, ":");
-	upload_size = simple_strtoul(cmd, NULL, 16);
-	upload_bytes = 0;
+	unsigned long const requested_upload_size = simple_strtoul(cmd, NULL, 16);
 
-	printf("Starting upload of %d bytes\n", upload_size);
+	void * const buffer = (void *)CONFIG_FASTBOOT_BUF_ADDR;
+	//unsigned long const buffer_max = CONFIG_FASTBOOT_BUF_SIZE;
 
-	if (0 == upload_size) {
-		sprintf(response, "FAILdata invalid size");
-	} else if (download_size > CONFIG_FASTBOOT_BUF_SIZE) {
-		upload_size = 0;
-		sprintf(response, "FAILdata too large");
+	unsigned long const endpoint_max = EP_BUFFER_SIZE;
+	
+	unsigned long bytes_left = requested_upload_size;
+
+	//Don't tolerate asking for more data than there is
+	if (requested_upload_size > upload_size) {
+		fastboot_tx_write_str("FAILdata invalid size");
 	} else {
-		sprintf(response, "DATA%08x", download_size);
-		req->complete = rx_handler_ul_image;
-		max = is_high_speed ? hs_ep_out.wMaxPacketSize :
-			fs_ep_out.wMaxPacketSize;
-		req->length = rx_bytes_expected(max);
-		if (req->length < ep->maxpacket)
-			req->length = ep->maxpacket;
+		printf("Starting upload of %ld bytes\n", requested_upload_size);
+		fastboot_tx_write_str("OKAY");
+		for(;bytes_left > endpoint_max;bytes_left -= endpoint_max) {
+			fastboot_tx_write(buffer + requested_upload_size - bytes_left, endpoint_max);
+		}
+		fastboot_tx_write(buffer + requested_upload_size - bytes_left, bytes_left);
 	}
-	fastboot_tx_write_str(response);
 }
 
 static void cb_download(struct usb_ep *ep, struct usb_request *req)
@@ -710,6 +708,9 @@ static const struct cmd_dispatch_info cmd_dispatch_info[] = {
 	}, {
 		.cmd = "getvar:",
 		.cb = cb_getvar,
+	}, {
+		.cmd = "upload:",
+		.cb = cb_upload,
 	}, {
 		.cmd = "download:",
 		.cb = cb_download,
